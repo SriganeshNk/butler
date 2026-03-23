@@ -1,4 +1,4 @@
-import type { LinkPreview } from "@/lib/types";
+import type { LinkPreview } from "./types";
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
 

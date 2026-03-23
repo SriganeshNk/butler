@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMessages, saveMessage } from "@/lib/chat-store";
+import { getMessages, saveMessage } from "../../../lib/chat-store";
 
 export async function GET() {
   const messages = await getMessages();

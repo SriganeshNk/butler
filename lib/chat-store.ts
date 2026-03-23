@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { ensureDatabase, getPool } from "@/lib/db";
-import type { ChatMessage, LinkPreview, Participant } from "@/lib/types";
-import { extractLinkPreviews } from "@/lib/unfurl";
+import { ensureDatabase, getPool } from "./db";
+import type { ChatMessage, LinkPreview, Participant } from "./types";
+import { extractLinkPreviews } from "./unfurl";
 
 type MessageRow = {
   id: string;
