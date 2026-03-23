@@ -6,7 +6,7 @@ Butler is a private two-person chat app with Slack-style link unfurls, built wit
 
 1. Create a Postgres database.
 2. Copy `.env.example` to `.env.local`.
-3. Set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET`.
+3. Set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXTAUTH_URL`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET`.
 4. Run:
 
 ```bash
@@ -25,4 +25,4 @@ This repo includes a [render.yaml](/Users/srijik/Documents/src/chat-app/render.y
 
 Push the repo to GitHub, GitLab, or Bitbucket, then create a new Render Blueprint from the repository.
 
-After the Blueprint is created, `AUTH_URL` is set to the Render service URL in `render.yaml`. Fill in `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in the Render Dashboard. `AUTH_SECRET` is generated automatically.
+After the Blueprint is created, `AUTH_URL` and `NEXTAUTH_URL` are set to the Render service URL in `render.yaml`. Fill in `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in the Render Dashboard. `AUTH_SECRET` is generated automatically.
