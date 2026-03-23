@@ -12,6 +12,8 @@ services:
         fromDatabase:
           name: butler-db
           property: connectionString
+      - key: AUTH_URL
+        value: https://butler-chat.onrender.com
       - key: AUTH_SECRET
         generateValue: true
       - key: AUTH_GOOGLE_ID
