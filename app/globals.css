@@ -58,6 +58,11 @@ p {
   overflow: hidden;
 }
 
+.auth-card,
+.onboarding-card {
+  min-height: auto;
+}
+
 .chat-header {
   display: flex;
   justify-content: space-between;
@@ -98,6 +103,14 @@ p {
   flex-wrap: wrap;
 }
 
+.partner-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .identity-button,
 .send-button {
   border: 0;
@@ -122,6 +135,28 @@ p {
 .identity-button:hover,
 .send-button:hover {
   transform: translateY(-1px);
+}
+
+.auth-button {
+  align-self: start;
+  margin-top: 16px;
+}
+
+.partner-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(45, 95, 79, 0.08);
+  color: var(--accent-strong);
+}
+
+.partner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #3c8c6a;
 }
 
 .message-list {
@@ -245,6 +280,33 @@ p {
   color: #8a2a2a;
 }
 
+.onboarding-header {
+  align-items: center;
+}
+
+.onboarding-panel {
+  padding: 28px 24px 32px;
+  display: grid;
+  gap: 18px;
+}
+
+.onboarding-panel h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.onboarding-copy {
+  max-width: 56ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 0;
@@ -265,6 +327,15 @@ p {
   .chat-header {
     align-items: start;
     flex-direction: column;
+  }
+
+  .partner-summary,
+  .invite-form {
+    width: 100%;
+  }
+
+  .invite-form {
+    grid-template-columns: 1fr;
   }
 
   .message-row {

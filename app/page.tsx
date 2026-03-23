@@ -1,27 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
+import type { ChatMessage, ChatRoom, PendingInvitation } from "../lib/types";
 
-type Participant = "You" | "Wife";
-
-type LinkPreview = {
-  url: string;
-  hostname: string;
-  title: string;
-  description: string;
-  image?: string;
-  siteName?: string;
-};
-
-type Message = {
-  id: string;
-  author: Participant;
-  text: string;
-  createdAt: string;
-  previews: LinkPreview[];
-};
-
-const PARTICIPANTS: Participant[] = ["You", "Wife"];
 const POLL_INTERVAL_MS = 4000;
 
 function formatTime(timestamp: string) {
@@ -53,44 +35,90 @@ function linkify(text: string) {
   });
 }
 
+function InviteState({ invitation }: { invitation: PendingInvitation | null }) {
+  if (!invitation) {
+    return (
+      <p className="onboarding-copy">
+        Add your wife&apos;s Gmail address and Butler will open the conversation automatically once
+        she signs in.
+      </p>
+    );
+  }
+
+  if (invitation.direction === "incoming") {
+    return (
+      <p className="onboarding-copy">
+        {invitation.inviterName ?? invitation.email} invited you. Butler will finish pairing this
+        chat automatically as soon as the room sync runs.
+      </p>
+    );
+  }
+
+  return (
+    <p className="onboarding-copy">
+      Invite saved for <strong>{invitation.email}</strong>. When she signs in with that Gmail
+      account, this chat will open automatically for both of you.
+    </p>
+  );
+}
+
+function AuthGate() {
+  return (
+    <main className="app-shell">
+      <section className="chat-card auth-card">
+        <p className="eyebrow">Private room</p>
+        <h1>Butler</h1>
+        <p className="subtitle">
+          Sign in with Google, invite your wife&apos;s Gmail, and keep one private thread between
+          the two of you.
+        </p>
+
+        <button className="send-button auth-button" onClick={() => signIn("google")} type="button">
+          Continue with Google
+        </button>
+      </section>
+    </main>
+  );
+}
+
 export default function HomePage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { data: session, status } = useSession();
+  const [room, setRoom] = useState<ChatRoom | null>(null);
   const [draft, setDraft] = useState("");
-  const [activeUser, setActiveUser] = useState<Participant>("You");
-  const [isLoading, setIsLoading] = useState(true);
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("chat-user") as Participant | null;
-
-    if (saved && PARTICIPANTS.includes(saved)) {
-      setActiveUser(saved);
+    if (status !== "authenticated") {
+      setRoom(null);
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    window.localStorage.setItem("chat-user", activeUser);
-  }, [activeUser]);
-
-  useEffect(() => {
     let cancelled = false;
 
-    async function loadMessages() {
+    async function loadRoom() {
       try {
+        if (!cancelled) {
+          setIsLoading(true);
+        }
+
         const response = await fetch("/api/messages", {
           cache: "no-store"
         });
 
         if (!response.ok) {
-          throw new Error("Failed to load messages.");
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Failed to load your room.");
         }
 
-        const data = (await response.json()) as { messages: Message[] };
+        const data = (await response.json()) as ChatRoom;
 
         if (!cancelled) {
-          setMessages(data.messages);
+          setRoom(data);
           setError(null);
         }
       } catch (loadError) {
@@ -104,18 +132,68 @@ export default function HomePage() {
       }
     }
 
-    loadMessages();
-    const interval = window.setInterval(loadMessages, POLL_INTERVAL_MS);
+    loadRoom();
+    const interval = window.setInterval(loadRoom, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [room?.messages]);
+
+  if (status === "loading") {
+    return (
+      <main className="app-shell">
+        <section className="chat-card auth-card">
+          <p className="system-message">Loading Butler…</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (status !== "authenticated" || !session?.user?.email) {
+    return <AuthGate />;
+  }
+
+  async function handleInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!partnerEmail.trim()) {
+      return;
+    }
+
+    setIsInviting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/invitations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          partnerEmail
+        })
+      });
+
+      const payload = (await response.json()) as ChatRoom | { error: string };
+
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Failed to save invite.");
+      }
+
+      setRoom(payload);
+      setPartnerEmail("");
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Unknown error.");
+    } finally {
+      setIsInviting(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,18 +212,16 @@ export default function HomePage() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          author: activeUser,
-          text
-        })
+        body: JSON.stringify({ text })
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to send message.");
+      const payload = (await response.json()) as ChatRoom | { error: string };
+
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Failed to send message.");
       }
 
-      const data = (await response.json()) as { messages: Message[] };
-      setMessages(data.messages);
+      setRoom(payload);
       setDraft("");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unknown error.");
@@ -154,6 +230,57 @@ export default function HomePage() {
     }
   }
 
+  if (!room?.partner) {
+    return (
+      <main className="app-shell">
+        <section className="chat-card onboarding-card">
+          <header className="chat-header onboarding-header">
+            <div>
+              <p className="eyebrow">Private room</p>
+              <h1>Butler</h1>
+              <p className="subtitle">
+                Signed in as <strong>{session.user.email}</strong>
+              </p>
+            </div>
+
+            <button className="identity-button" onClick={() => signOut()} type="button">
+              Sign out
+            </button>
+          </header>
+
+          <div className="onboarding-panel">
+            <h2>Invite your wife</h2>
+            <InviteState invitation={room?.invitation ?? null} />
+
+            <form className="invite-form" onSubmit={handleInvite}>
+              <input
+                autoComplete="email"
+                className="composer-input"
+                onChange={(event) => setPartnerEmail(event.target.value)}
+                placeholder="wife@gmail.com"
+                type="email"
+                value={partnerEmail}
+              />
+              <button className="send-button" disabled={isInviting} type="submit">
+                {isInviting ? "Saving…" : "Save Invite"}
+              </button>
+            </form>
+
+            <p className="composer-hint">
+              Once she signs in with the invited Gmail, Butler will collapse into one shared chat
+              thread automatically.
+            </p>
+          </div>
+
+          {error ? <p className="error-banner">{error}</p> : null}
+          {isLoading ? <p className="system-message">Checking for your partner…</p> : null}
+        </section>
+      </main>
+    );
+  }
+
+  const messages = room.messages;
+
   return (
     <main className="app-shell">
       <section className="chat-card">
@@ -161,31 +288,32 @@ export default function HomePage() {
           <div>
             <p className="eyebrow">Private room</p>
             <h1>Butler</h1>
-            <p className="subtitle">Private messaging for two, with Slack-style link unfurls.</p>
+            <p className="subtitle">
+              {room.partner.name} and {room.viewer.name}, together in one thread.
+            </p>
           </div>
 
-          <div className="identity-switcher" aria-label="Choose sender">
-            {PARTICIPANTS.map((person) => (
-              <button
-                className={person === activeUser ? "identity-button active" : "identity-button"}
-                key={person}
-                onClick={() => setActiveUser(person)}
-                type="button"
-              >
-                {person}
-              </button>
-            ))}
+          <div className="partner-summary">
+            <div className="partner-chip">
+              <span className="partner-dot" />
+              <span>{room.partner.email}</span>
+            </div>
+            <button className="identity-button" onClick={() => signOut()} type="button">
+              Sign out
+            </button>
           </div>
         </header>
 
         <div className="message-list">
-          {isLoading ? <p className="system-message">Loading chat…</p> : null}
+          {isLoading ? <p className="system-message">Refreshing chat…</p> : null}
           {!isLoading && messages.length === 0 ? (
-            <p className="system-message">Share a first message or paste a link to see an unfurl.</p>
+            <p className="system-message">
+              Say hi to {room.partner.name.split(" ")[0]} or paste a link to see an unfurl.
+            </p>
           ) : null}
 
-          {messages.map((message) => {
-            const ownMessage = message.author === activeUser;
+          {messages.map((message: ChatMessage) => {
+            const ownMessage = message.authorEmail === room.viewer.email;
 
             return (
               <article
@@ -193,7 +321,7 @@ export default function HomePage() {
                 key={message.id}
               >
                 <div className="message-meta">
-                  <span>{message.author}</span>
+                  <span>{ownMessage ? "You" : message.authorName}</span>
                   <span>{formatTime(message.createdAt)}</span>
                 </div>
 
@@ -217,11 +345,9 @@ export default function HomePage() {
                       ) : null}
 
                       <div className="preview-copy">
-                        <span className="preview-site">
-                          {preview.siteName || preview.hostname}
-                        </span>
+                        <span className="preview-site">{preview.siteName ?? preview.hostname}</span>
                         <strong>{preview.title}</strong>
-                        {preview.description ? <span>{preview.description}</span> : null}
+                        <span>{preview.description}</span>
                       </div>
                     </a>
                   ))}
@@ -237,14 +363,16 @@ export default function HomePage() {
           <textarea
             className="composer-input"
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Write a message or paste a link…"
+            placeholder={`Message ${room.partner.name.split(" ")[0]}…`}
             rows={3}
             value={draft}
           />
+
           <div className="composer-footer">
-            <span className="composer-hint">
-              Sender: <strong>{activeUser}</strong>
-            </span>
+            <p className="composer-hint">
+              Signed in as <strong>{room.viewer.email}</strong>
+            </p>
+
             <button className="send-button" disabled={isSending} type="submit">
               {isSending ? "Sending…" : "Send"}
             </button>

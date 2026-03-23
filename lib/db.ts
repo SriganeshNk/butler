@@ -31,9 +31,35 @@ export function getPool() {
 
 async function createSchema(client: PoolClient) {
   await client.query(`
-    create table if not exists messages (
+    create table if not exists app_users (
+      email text primary key,
+      name text not null,
+      image text,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists partnerships (
       id uuid primary key,
-      author text not null check (author in ('You', 'Wife')),
+      user_one_email text not null references app_users(email) on delete cascade,
+      user_two_email text not null references app_users(email) on delete cascade,
+      created_at timestamptz not null default now(),
+      constraint partnerships_distinct_users check (user_one_email <> user_two_email),
+      constraint partnerships_ordered_users check (user_one_email < user_two_email),
+      unique (user_one_email),
+      unique (user_two_email)
+    );
+
+    create table if not exists partner_invitations (
+      invitee_email text primary key,
+      inviter_email text not null references app_users(email) on delete cascade,
+      created_at timestamptz not null default now(),
+      constraint partner_invitations_distinct_users check (invitee_email <> inviter_email)
+    );
+
+    create table if not exists conversation_messages (
+      id uuid primary key,
+      partnership_id uuid not null references partnerships(id) on delete cascade,
+      author_email text not null references app_users(email) on delete cascade,
       text text not null,
       previews jsonb not null default '[]'::jsonb,
       created_at timestamptz not null default now()
