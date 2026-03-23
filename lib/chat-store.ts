@@ -398,7 +398,7 @@ export async function saveMessage(user: User, text: string): Promise<ChatRoom> {
   await getPool().query(
     `
       insert into conversation_messages (id, partnership_id, author_email, text, previews)
-      values ($1, $2, $3, $4::jsonb)
+      values ($1, $2, $3, $4, $5::jsonb)
     `,
     [randomUUID(), partnership.id, viewerEmail, text, JSON.stringify(previews)]
   );
