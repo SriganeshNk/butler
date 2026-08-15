@@ -25,7 +25,7 @@ services:
 
 databases:
   - name: butler-db
-    plan: standard
+    plan: pro
     region: oregon
     databaseName: butler
     user: butler
